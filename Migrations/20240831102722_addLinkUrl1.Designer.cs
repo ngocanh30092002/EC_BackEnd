@@ -4,6 +4,7 @@ using EnglishCenter.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EnglishCenter.Migrations
 {
     [DbContext(typeof(EnglishCenterContext))]
-    partial class EnglishCenterContextModelSnapshot : ModelSnapshot
+    [Migration("20240831102722_addLinkUrl1")]
+    partial class addLinkUrl1
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -291,7 +294,6 @@ namespace EnglishCenter.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("NotiId"));
 
                     b.Property<string>("Description")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
@@ -310,11 +312,16 @@ namespace EnglishCenter.Migrations
                         .HasColumnType("datetime");
 
                     b.Property<string>("Title")
-                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("UserId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("NotiId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Notifications");
                 });
@@ -959,21 +966,6 @@ namespace EnglishCenter.Migrations
                     b.ToTable("UserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("NotiStudents", b =>
-                {
-                    b.Property<long>("NotiId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("NotiId", "UserId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("NotiStudents", (string)null);
-                });
-
             modelBuilder.Entity("EnglishCenter.Models.AnswerSheet", b =>
                 {
                     b.HasOne("EnglishCenter.Models.Attendance", "Attendance")
@@ -1098,6 +1090,17 @@ namespace EnglishCenter.Migrations
                     b.Navigation("Class");
 
                     b.Navigation("Status");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("EnglishCenter.Models.Notification", b =>
+                {
+                    b.HasOne("EnglishCenter.Models.Student", "User")
+                        .WithMany("Notifications")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("FK_Notifications_Students");
 
                     b.Navigation("User");
                 });
@@ -1238,21 +1241,6 @@ namespace EnglishCenter.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("NotiStudents", b =>
-                {
-                    b.HasOne("EnglishCenter.Models.Notification", null)
-                        .WithMany()
-                        .HasForeignKey("NotiId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("EnglishCenter.Models.Student", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("EnglishCenter.Models.Assignment", b =>
                 {
                     b.Navigation("Attendances");
@@ -1336,6 +1324,8 @@ namespace EnglishCenter.Migrations
             modelBuilder.Entity("EnglishCenter.Models.Student", b =>
                 {
                     b.Navigation("Enrollments");
+
+                    b.Navigation("Notifications");
 
                     b.Navigation("StuInClasses");
                 });

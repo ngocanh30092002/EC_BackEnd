@@ -4,6 +4,7 @@ using EnglishCenter.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace EnglishCenter.Migrations
 {
     [DbContext(typeof(EnglishCenterContext))]
-    partial class EnglishCenterContextModelSnapshot : ModelSnapshot
+    [Migration("20240830095322_init")]
+    partial class init
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -264,24 +267,6 @@ namespace EnglishCenter.Migrations
                     b.ToTable("Enrollment");
                 });
 
-            modelBuilder.Entity("EnglishCenter.Models.Group", b =>
-                {
-                    b.Property<int>("GroupId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("GroupId"));
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("GroupId");
-
-                    b.ToTable("Groups");
-                });
-
             modelBuilder.Entity("EnglishCenter.Models.Notification", b =>
                 {
                     b.Property<long>("NotiId")
@@ -291,30 +276,29 @@ namespace EnglishCenter.Migrations
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("NotiId"));
 
                     b.Property<string>("Description")
-                        .IsRequired()
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
-                    b.Property<string>("Image")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                    b.Property<bool?>("IsOk")
+                        .HasColumnType("bit");
 
                     b.Property<bool?>("IsRead")
                         .HasColumnType("bit");
-
-                    b.Property<string>("LinkUrl")
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
 
                     b.Property<DateTime?>("Time")
                         .HasColumnType("datetime");
 
                     b.Property<string>("Title")
-                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("UserId")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
                     b.HasKey("NotiId");
+
+                    b.HasIndex("UserId");
 
                     b.ToTable("Notifications");
                 });
@@ -811,21 +795,6 @@ namespace EnglishCenter.Migrations
                     b.ToTable("Users", (string)null);
                 });
 
-            modelBuilder.Entity("GroupStudent", b =>
-                {
-                    b.Property<int>("GroupId")
-                        .HasColumnType("int");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("GroupId", "UserId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("GroupStudent", (string)null);
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole", b =>
                 {
                     b.Property<string>("Id")
@@ -959,21 +928,6 @@ namespace EnglishCenter.Migrations
                     b.ToTable("UserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("NotiStudents", b =>
-                {
-                    b.Property<long>("NotiId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("UserId")
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("NotiId", "UserId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("NotiStudents", (string)null);
-                });
-
             modelBuilder.Entity("EnglishCenter.Models.AnswerSheet", b =>
                 {
                     b.HasOne("EnglishCenter.Models.Attendance", "Attendance")
@@ -1102,6 +1056,17 @@ namespace EnglishCenter.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("EnglishCenter.Models.Notification", b =>
+                {
+                    b.HasOne("EnglishCenter.Models.Student", "User")
+                        .WithMany("Notifications")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("FK_Notifications_Students");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("EnglishCenter.Models.StuInClass", b =>
                 {
                     b.HasOne("EnglishCenter.Models.Class", "Class")
@@ -1172,21 +1137,6 @@ namespace EnglishCenter.Migrations
                     b.Navigation("PreQues");
                 });
 
-            modelBuilder.Entity("GroupStudent", b =>
-                {
-                    b.HasOne("EnglishCenter.Models.Group", null)
-                        .WithMany()
-                        .HasForeignKey("GroupId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("EnglishCenter.Models.Student", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -1232,21 +1182,6 @@ namespace EnglishCenter.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<string>", b =>
                 {
                     b.HasOne("EnglishCenter.Models.User", null)
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("NotiStudents", b =>
-                {
-                    b.HasOne("EnglishCenter.Models.Notification", null)
-                        .WithMany()
-                        .HasForeignKey("NotiId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("EnglishCenter.Models.Student", null)
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -1336,6 +1271,8 @@ namespace EnglishCenter.Migrations
             modelBuilder.Entity("EnglishCenter.Models.Student", b =>
                 {
                     b.Navigation("Enrollments");
+
+                    b.Navigation("Notifications");
 
                     b.Navigation("StuInClasses");
                 });
