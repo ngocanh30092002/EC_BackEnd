@@ -1,7 +1,7 @@
 ﻿
 namespace EnglishCenter.Models.DTO
 {
-    public class NotiDtoModel
+    public class NotiDto
     {
         public long? NotiStuId { get; set; }
 

@@ -4,7 +4,7 @@ using EnglishCenter.Attribute;
 
 namespace EnglishCenter.Models.DTO
 {
-    public class UserInfoDtoModel
+    public class UserInfoDto
     {
         [Required]
         public string FirstName { get; set; }

@@ -2,7 +2,7 @@
 
 namespace EnglishCenter.Models.DTO
 {
-    public class CourseDtoModel
+    public class CourseDto
     {
         [Required]
         [StringLength(10, MinimumLength = 0)]

@@ -2,7 +2,7 @@
 
 namespace EnglishCenter.Models.DTO
 {
-    public class EventDtoModel
+    public class EventDto
     {
         public long? ScheduleId { set; get; }
 

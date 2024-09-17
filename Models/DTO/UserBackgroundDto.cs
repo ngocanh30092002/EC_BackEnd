@@ -2,7 +2,7 @@
 
 namespace EnglishCenter.Models.DTO
 {
-    public class UserBackgroundDtoModel
+    public class UserBackgroundDto
     {
         [Required]
         public string UserName { set; get; }
