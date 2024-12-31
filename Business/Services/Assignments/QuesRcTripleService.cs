@@ -19,8 +19,16 @@ namespace EnglishCenter.Business.Services.Assignments
         private readonly string _imageBasePath1;
         private readonly string _imageBasePath2;
         private readonly string _imageBasePath3;
+        private readonly IHomeQuesService _homeQuesService;
+        private readonly IAssignQuesService _assignQuesService;
 
-        public QuesRcTripleService(IUnitOfWork unit, IMapper mapper, IWebHostEnvironment webHostEnvironment, ISubRcTripleService subService)
+        public QuesRcTripleService(
+            IUnitOfWork unit,
+            IMapper mapper,
+            IWebHostEnvironment webHostEnvironment,
+            ISubRcTripleService subService,
+            IHomeQuesService homeQuesService,
+            IAssignQuesService assignQuesService)
         {
             _unit = unit;
             _mapper = mapper;
@@ -29,6 +37,8 @@ namespace EnglishCenter.Business.Services.Assignments
             _imageBasePath1 = Path.Combine("questions", "rc-triple", "image1");
             _imageBasePath2 = Path.Combine("questions", "rc-triple", "image2");
             _imageBasePath3 = Path.Combine("questions", "rc-triple", "image3");
+            _homeQuesService = homeQuesService;
+            _assignQuesService = assignQuesService;
         }
         public async Task<Response> ChangeImage1Async(long quesId, IFormFile imageFile)
         {
@@ -466,6 +476,28 @@ namespace EnglishCenter.Business.Services.Assignments
             foreach (var subId in subIds)
             {
                 await _subService.DeleteAsync(subId);
+            }
+
+            var assignQueIds = _unit.AssignQues
+                                .Find(a => a.Type == (int)QuesTypeEnum.Triple && a.TripleQuesId == quesId)
+                                .Select(a => a.AssignQuesId)
+                                .ToList();
+
+            foreach (var assignId in assignQueIds)
+            {
+                var deleteRes = await _assignQuesService.DeleteAsync(assignId);
+                if (!deleteRes.Success) return deleteRes;
+            }
+
+            var homeQueIds = _unit.HomeQues
+                                .Find(a => a.Type == (int)QuesTypeEnum.Triple && a.TripleQuesId == quesId)
+                                .Select(a => a.HomeQuesId)
+                                .ToList();
+
+            foreach (var homeId in homeQueIds)
+            {
+                var deleteRes = await _homeQuesService.DeleteAsync(homeId);
+                if (!deleteRes.Success) return deleteRes;
             }
 
             _unit.QuesRcTriples.Remove(queModel);

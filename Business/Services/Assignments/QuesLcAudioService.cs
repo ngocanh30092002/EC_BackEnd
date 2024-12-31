@@ -16,13 +16,17 @@ namespace EnglishCenter.Business.Services.Assignments
         private readonly IUnitOfWork _unit;
         private readonly IMapper _mapper;
         private readonly IWebHostEnvironment _webHostEnvironment;
+        private readonly IHomeQuesService _homeQuesService;
+        private readonly IAssignQuesService _assignQuesService;
         private string _audioBasePath;
 
-        public QuesLcAudioService(IUnitOfWork unit, IMapper mapper, IWebHostEnvironment webHostEnvironment)
+        public QuesLcAudioService(IUnitOfWork unit, IMapper mapper, IWebHostEnvironment webHostEnvironment, IHomeQuesService homeQuesService, IAssignQuesService assignQuesService)
         {
             _unit = unit;
             _mapper = mapper;
             _webHostEnvironment = webHostEnvironment;
+            _homeQuesService = homeQuesService;
+            _assignQuesService = assignQuesService;
             _audioBasePath = Path.Combine("questions", "lc_audio");
         }
 
@@ -315,71 +319,83 @@ namespace EnglishCenter.Business.Services.Assignments
             var audioFolderPath = Path.Combine(_webHostEnvironment.WebRootPath, _audioBasePath);
             var fileAudio = $"audio_{DateTime.Now.Ticks}{Path.GetExtension(queModel.Audio.FileName)}";
 
-            var result = await UploadHelper.UploadFileAsync(queModel.Audio, audioFolderPath, fileAudio);
-            if (!string.IsNullOrEmpty(result))
+            try
+            {
+                var result = await UploadHelper.UploadFileAsync(queModel.Audio, audioFolderPath, fileAudio);
+                if (!string.IsNullOrEmpty(result))
+                {
+                    return new Response()
+                    {
+                        StatusCode = System.Net.HttpStatusCode.BadRequest,
+                        Message = result,
+                        Success = false
+                    };
+                }
+
+                var durationAudio = await VideoHelper.GetDurationAsync(Path.Combine(audioFolderPath, fileAudio));
+
+                var queEntity = _mapper.Map<QuesLcAudio>(queModel);
+
+                queEntity.Audio = Path.Combine(_audioBasePath, fileAudio);
+                queEntity.Time = TimeOnly.FromTimeSpan(durationAudio);
+
+                if (queModel.AnswerId != null)
+                {
+                    var answerModel = await _unit.AnswerRcSingles
+                                                .Include(a => a.SubRcSingle)
+                                                .FirstOrDefaultAsync(a => a.AnswerId == queModel.AnswerId);
+                    if (answerModel == null)
+                    {
+                        return new Response()
+                        {
+                            StatusCode = System.Net.HttpStatusCode.BadRequest,
+                            Message = "Can't find any answers",
+                            Success = false
+                        };
+                    }
+
+                    if (answerModel.SubRcSingle != null)
+                    {
+                        return new Response()
+                        {
+                            StatusCode = System.Net.HttpStatusCode.BadRequest,
+                            Message = "This answer is from another question",
+                            Success = false
+                        };
+                    }
+
+                    queEntity.AnswerId = queModel.AnswerId;
+                }
+                else
+                {
+                    if (queModel.Answer != null)
+                    {
+                        var answerModel = _mapper.Map<AnswerLcAudio>(queModel.Answer);
+                        _unit.AnswerLcAudios.Add(answerModel);
+
+                        queEntity.Answer = answerModel;
+                    }
+                }
+
+                _unit.QuesLcAudios.Add(queEntity);
+
+                await _unit.CompleteAsync();
+                return new Response()
+                {
+                    StatusCode = System.Net.HttpStatusCode.OK,
+                    Message = "",
+                    Success = true
+                };
+            }
+            catch (Exception ex)
             {
                 return new Response()
                 {
                     StatusCode = System.Net.HttpStatusCode.BadRequest,
-                    Message = result,
+                    Message = "Create question failed",
                     Success = false
                 };
             }
-
-            var durationAudio = await VideoHelper.GetDurationAsync(Path.Combine(audioFolderPath, fileAudio));
-
-            var queEntity = _mapper.Map<QuesLcAudio>(queModel);
-
-            queEntity.Audio = Path.Combine(_audioBasePath, fileAudio);
-            queEntity.Time = TimeOnly.FromTimeSpan(durationAudio);
-
-            if (queModel.AnswerId != null)
-            {
-                var answerModel = await _unit.AnswerRcSingles
-                                            .Include(a => a.SubRcSingle)
-                                            .FirstOrDefaultAsync(a => a.AnswerId == queModel.AnswerId);
-                if (answerModel == null)
-                {
-                    return new Response()
-                    {
-                        StatusCode = System.Net.HttpStatusCode.BadRequest,
-                        Message = "Can't find any answers",
-                        Success = false
-                    };
-                }
-
-                if (answerModel.SubRcSingle != null)
-                {
-                    return new Response()
-                    {
-                        StatusCode = System.Net.HttpStatusCode.BadRequest,
-                        Message = "This answer is from another question",
-                        Success = false
-                    };
-                }
-
-                queEntity.AnswerId = queModel.AnswerId;
-            }
-            else
-            {
-                if (queModel.Answer != null)
-                {
-                    var answerModel = _mapper.Map<AnswerLcAudio>(queModel.Answer);
-                    _unit.AnswerLcAudios.Add(answerModel);
-
-                    queEntity.Answer = answerModel;
-                }
-            }
-
-            _unit.QuesLcAudios.Add(queEntity);
-
-            await _unit.CompleteAsync();
-            return new Response()
-            {
-                StatusCode = System.Net.HttpStatusCode.OK,
-                Message = "",
-                Success = true
-            };
         }
 
         public async Task<Response> DeleteAsync(long quesId)
@@ -406,6 +422,28 @@ namespace EnglishCenter.Business.Services.Assignments
             {
                 var answerModel = _unit.AnswerLcAudios.GetById((long)quesModel.AnswerId);
                 _unit.AnswerLcAudios.Remove(answerModel);
+            }
+
+            var assignQueIds = _unit.AssignQues
+                                  .Find(a => a.Type == (int)QuesTypeEnum.Audio && a.AudioQuesId == quesId)
+                                  .Select(a => a.AssignQuesId)
+                                  .ToList();
+
+            foreach (var assignId in assignQueIds)
+            {
+                var deleteRes = await _assignQuesService.DeleteAsync(assignId);
+                if (!deleteRes.Success) return deleteRes;
+            }
+
+            var homeQueIds = _unit.HomeQues
+                                .Find(a => a.Type == (int)QuesTypeEnum.Audio && a.AudioQuesId == quesId)
+                                .Select(a => a.HomeQuesId)
+                                .ToList();
+
+            foreach (var homeId in homeQueIds)
+            {
+                var deleteRes = await _homeQuesService.DeleteAsync(homeId);
+                if (!deleteRes.Success) return deleteRes;
             }
 
             _unit.QuesLcAudios.Remove(quesModel);

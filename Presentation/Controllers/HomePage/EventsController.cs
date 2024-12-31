@@ -75,6 +75,7 @@ namespace EnglishCenter.Presentation.Controllers.HomePage
         public async Task<IActionResult> GetNotificationsEventsInRange([FromRoute] string startTime, [FromRoute] string endTime)
         {
             string formatDate = "yyyy-MM-dd";
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "";
 
             bool isValidStartTime = DateOnly.TryParseExact(
                             startTime,
@@ -95,7 +96,7 @@ namespace EnglishCenter.Presentation.Controllers.HomePage
                 return BadRequest("Invalid date format. Please use yyyy-MM-dd.");
             }
 
-            var response = await _eventService.GetEventsInRangeAsync(startDate, endDate);
+            var response = await _eventService.GetEventsInRangeAsync(userId, startDate, endDate);
 
             return await response.ChangeActionAsync();
         }

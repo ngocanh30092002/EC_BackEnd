@@ -18,12 +18,16 @@ namespace EnglishCenter.Business.Services.Assignments
         private readonly ISubRcDoubleService _subService;
         private readonly string _imageBasePath1;
         private readonly string _imageBasePath2;
+        private readonly IHomeQuesService _homeQuesService;
+        private readonly IAssignQuesService _assignQuesService;
 
         public QuesRcDoubleService(
             IUnitOfWork unit,
             IMapper mapper,
             IWebHostEnvironment webHostEnvironment,
-            ISubRcDoubleService subService)
+            ISubRcDoubleService subService,
+            IHomeQuesService homeQuesService,
+            IAssignQuesService assignQuesService)
         {
             _unit = unit;
             _mapper = mapper;
@@ -31,6 +35,8 @@ namespace EnglishCenter.Business.Services.Assignments
             _subService = subService;
             _imageBasePath1 = Path.Combine("questions", "rc-double", "image1");
             _imageBasePath2 = Path.Combine("questions", "rc-double", "image2");
+            _homeQuesService = homeQuesService;
+            _assignQuesService = assignQuesService;
         }
 
         public async Task<Response> ChangeImage1Async(long quesId, IFormFile imageFile)
@@ -396,6 +402,28 @@ namespace EnglishCenter.Business.Services.Assignments
             foreach (var subId in subIds)
             {
                 await _subService.DeleteAsync(subId);
+            }
+
+            var assignQueIds = _unit.AssignQues
+                                  .Find(a => a.Type == (int)QuesTypeEnum.Double && a.DoubleQuesId == quesId)
+                                  .Select(a => a.AssignQuesId)
+                                  .ToList();
+
+            foreach (var assignId in assignQueIds)
+            {
+                var deleteRes = await _assignQuesService.DeleteAsync(assignId);
+                if (!deleteRes.Success) return deleteRes;
+            }
+
+            var homeQueIds = _unit.HomeQues
+                                .Find(a => a.Type == (int)QuesTypeEnum.Double && a.DoubleQuesId == quesId)
+                                .Select(a => a.HomeQuesId)
+                                .ToList();
+
+            foreach (var homeId in homeQueIds)
+            {
+                var deleteRes = await _homeQuesService.DeleteAsync(homeId);
+                if (!deleteRes.Success) return deleteRes;
             }
 
             _unit.QuesRcDoubles.Remove(queModel);

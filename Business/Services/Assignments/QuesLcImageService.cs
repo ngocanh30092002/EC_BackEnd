@@ -16,14 +16,18 @@ namespace EnglishCenter.Business.Services.Assignments
         private readonly IUnitOfWork _unit;
         private readonly IWebHostEnvironment _webHostEnvironment;
         private readonly IMapper _mapper;
+        private readonly IHomeQuesService _homeQuesService;
+        private readonly IAssignQuesService _assignQuesService;
         private string _imageBasePath;
         private string _audioBasePath;
 
-        public QuesLcImageService(IUnitOfWork unit, IWebHostEnvironment webHostEnvironment, IMapper mapper)
+        public QuesLcImageService(IUnitOfWork unit, IWebHostEnvironment webHostEnvironment, IMapper mapper, IHomeQuesService homeQuesService, IAssignQuesService assignQuesService)
         {
             _unit = unit;
             _webHostEnvironment = webHostEnvironment;
             _mapper = mapper;
+            _homeQuesService = homeQuesService;
+            _assignQuesService = assignQuesService;
             _imageBasePath = Path.Combine("questions", "lc_image", "image");
             _audioBasePath = Path.Combine("questions", "lc_image", "audio");
         }
@@ -237,96 +241,108 @@ namespace EnglishCenter.Business.Services.Assignments
             var imgFolderPath = Path.Combine(_webHostEnvironment.WebRootPath, _imageBasePath);
             var fileImage = $"image_{DateTime.Now.Ticks}{Path.GetExtension(queModel.Image.FileName)}";
 
-            var result = await UploadHelper.UploadFileAsync(queModel.Image, imgFolderPath, fileImage);
-            if (!string.IsNullOrEmpty(result))
+            try
             {
-                return new Response()
-                {
-                    StatusCode = System.Net.HttpStatusCode.BadRequest,
-                    Message = result,
-                    Success = false
-                };
-            }
-
-            if (queModel.Audio == null)
-            {
-                return new Response()
-                {
-                    StatusCode = System.Net.HttpStatusCode.BadRequest,
-                    Message = "Image file is required",
-                    Success = false
-                };
-            }
-
-            var audioFolderPath = Path.Combine(_webHostEnvironment.WebRootPath, _audioBasePath);
-            var fileAudio = $"audio_{DateTime.Now.Ticks}{Path.GetExtension(queModel.Audio.FileName)}";
-
-            result = await UploadHelper.UploadFileAsync(queModel.Audio, audioFolderPath, fileAudio);
-            if (!string.IsNullOrEmpty(result))
-            {
-                return new Response()
-                {
-                    StatusCode = System.Net.HttpStatusCode.BadRequest,
-                    Message = result,
-                    Success = false
-                };
-            }
-
-            var durationAudio = await VideoHelper.GetDurationAsync(Path.Combine(audioFolderPath, fileAudio));
-
-            var queEntity = new QuesLcImage();
-            queEntity.Image = Path.Combine(_imageBasePath, fileImage);
-            queEntity.Audio = Path.Combine(_audioBasePath, fileAudio);
-            queEntity.Time = TimeOnly.FromTimeSpan(durationAudio);
-            queEntity.Level = queModel.Level ?? 1;
-
-            if (queModel.AnswerId != null)
-            {
-                var answerModel = await _unit.AnswerLcImages
-                                            .Include(a => a.QuesLcImage)
-                                            .FirstOrDefaultAsync(a => a.AnswerId == queModel.AnswerId);
-                if (answerModel == null)
+                var result = await UploadHelper.UploadFileAsync(queModel.Image, imgFolderPath, fileImage);
+                if (!string.IsNullOrEmpty(result))
                 {
                     return new Response()
                     {
                         StatusCode = System.Net.HttpStatusCode.BadRequest,
-                        Message = "Can't find any answers",
+                        Message = result,
                         Success = false
                     };
                 }
 
-                if (answerModel.QuesLcImage != null)
+                if (queModel.Audio == null)
                 {
                     return new Response()
                     {
                         StatusCode = System.Net.HttpStatusCode.BadRequest,
-                        Message = "This answer is from another question",
+                        Message = "Image file is required",
                         Success = false
                     };
                 }
 
-                queEntity.AnswerId = queModel.AnswerId;
-            }
-            else
-            {
-                if (queModel.Answer != null)
+                var audioFolderPath = Path.Combine(_webHostEnvironment.WebRootPath, _audioBasePath);
+                var fileAudio = $"audio_{DateTime.Now.Ticks}{Path.GetExtension(queModel.Audio.FileName)}";
+
+                result = await UploadHelper.UploadFileAsync(queModel.Audio, audioFolderPath, fileAudio);
+                if (!string.IsNullOrEmpty(result))
                 {
-                    var answerModel = _mapper.Map<AnswerLcImage>(queModel.Answer);
-                    _unit.AnswerLcImages.Add(answerModel);
-
-                    queEntity.Answer = answerModel;
+                    return new Response()
+                    {
+                        StatusCode = System.Net.HttpStatusCode.BadRequest,
+                        Message = result,
+                        Success = false
+                    };
                 }
+
+                var durationAudio = await VideoHelper.GetDurationAsync(Path.Combine(audioFolderPath, fileAudio));
+
+                var queEntity = new QuesLcImage();
+                queEntity.Image = Path.Combine(_imageBasePath, fileImage);
+                queEntity.Audio = Path.Combine(_audioBasePath, fileAudio);
+                queEntity.Time = TimeOnly.FromTimeSpan(durationAudio);
+                queEntity.Level = queModel.Level ?? 1;
+
+                if (queModel.AnswerId != null)
+                {
+                    var answerModel = await _unit.AnswerLcImages
+                                                .Include(a => a.QuesLcImage)
+                                                .FirstOrDefaultAsync(a => a.AnswerId == queModel.AnswerId);
+                    if (answerModel == null)
+                    {
+                        return new Response()
+                        {
+                            StatusCode = System.Net.HttpStatusCode.BadRequest,
+                            Message = "Can't find any answers",
+                            Success = false
+                        };
+                    }
+
+                    if (answerModel.QuesLcImage != null)
+                    {
+                        return new Response()
+                        {
+                            StatusCode = System.Net.HttpStatusCode.BadRequest,
+                            Message = "This answer is from another question",
+                            Success = false
+                        };
+                    }
+
+                    queEntity.AnswerId = queModel.AnswerId;
+                }
+                else
+                {
+                    if (queModel.Answer != null)
+                    {
+                        var answerModel = _mapper.Map<AnswerLcImage>(queModel.Answer);
+                        _unit.AnswerLcImages.Add(answerModel);
+
+                        queEntity.Answer = answerModel;
+                    }
+                }
+
+                _unit.QuesLcImages.Add(queEntity);
+
+                await _unit.CompleteAsync();
+                return new Response()
+                {
+                    StatusCode = System.Net.HttpStatusCode.OK,
+                    Message = "",
+                    Success = true
+                };
             }
-
-            _unit.QuesLcImages.Add(queEntity);
-
-            await _unit.CompleteAsync();
-            return new Response()
+            catch (Exception ex)
             {
-                StatusCode = System.Net.HttpStatusCode.OK,
-                Message = "",
-                Success = true
-            };
+                return new Response()
+                {
+                    StatusCode = System.Net.HttpStatusCode.BadRequest,
+                    Message = "Create question failed",
+                    Success = false
+                };
+            }
         }
 
         public async Task<Response> DeleteAsync(long quesId)
@@ -359,6 +375,28 @@ namespace EnglishCenter.Business.Services.Assignments
             {
                 var answerModel = _unit.AnswerLcImages.GetById((long)quesModel.AnswerId);
                 _unit.AnswerLcImages.Remove(answerModel);
+            }
+
+            var assignQueIds = _unit.AssignQues
+                                  .Find(a => a.Type == (int)QuesTypeEnum.Image && a.ImageQuesId == quesId)
+                                  .Select(a => a.AssignQuesId)
+                                  .ToList();
+
+            foreach (var assignId in assignQueIds)
+            {
+                var deleteRes = await _assignQuesService.DeleteAsync(assignId);
+                if (!deleteRes.Success) return deleteRes;
+            }
+
+            var homeQueIds = _unit.HomeQues
+                                .Find(a => a.Type == (int)QuesTypeEnum.Image && a.ImageQuesId == quesId)
+                                .Select(a => a.HomeQuesId)
+                                .ToList();
+
+            foreach (var homeId in homeQueIds)
+            {
+                var deleteRes = await _homeQuesService.DeleteAsync(homeId);
+                if (!deleteRes.Success) return deleteRes;
             }
 
             _unit.QuesLcImages.Remove(quesModel);

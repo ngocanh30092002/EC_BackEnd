@@ -113,9 +113,9 @@ namespace EnglishCenter.Business.Services.Authorization
             };
         }
 
-        public async Task<Response> GetEventsInRangeAsync(DateOnly startTime, DateOnly endTime)
+        public async Task<Response> GetEventsInRangeAsync(string userId, DateOnly startTime, DateOnly endTime)
         {
-            var events = await _unit.Events.GetEventsInRangeAsync(startTime, endTime);
+            var events = await _unit.Events.GetEventsInRangeAsync(userId, startTime, endTime);
 
             return new Response()
             {
@@ -210,6 +210,7 @@ namespace EnglishCenter.Business.Services.Authorization
                 Success = true
             };
         }
+
         public async Task<Response> UpdateAsync(long eventId, EventDto model)
         {
             var eventModel = _unit.Events.GetById(eventId);

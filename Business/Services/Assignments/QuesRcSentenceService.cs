@@ -14,11 +14,15 @@ namespace EnglishCenter.Business.Services.Assignments
     {
         private readonly IUnitOfWork _unit;
         private readonly IMapper _mapper;
+        private readonly IHomeQuesService _homeQuesService;
+        private readonly IAssignQuesService _assignQuesService;
 
-        public QuesRcSentenceService(IUnitOfWork unit, IMapper mapper)
+        public QuesRcSentenceService(IUnitOfWork unit, IMapper mapper, IHomeQuesService homeQuesService, IAssignQuesService assignQuesService)
         {
             _unit = unit;
             _mapper = mapper;
+            _homeQuesService = homeQuesService;
+            _assignQuesService = assignQuesService;
         }
 
         public async Task<Response> ChangeAnswerAAsync(long quesId, string newAnswer)
@@ -386,6 +390,28 @@ namespace EnglishCenter.Business.Services.Assignments
             {
                 var answerModel = _unit.AnswerRcSentences.GetById((long)queModel.AnswerId);
                 _unit.AnswerRcSentences.Remove(answerModel);
+            }
+
+            var assignQueIds = _unit.AssignQues
+                                    .Find(a => a.Type == (int)QuesTypeEnum.Sentence && a.SentenceQuesId == quesId)
+                                    .Select(a => a.AssignQuesId)
+                                    .ToList();
+
+            foreach (var assignId in assignQueIds)
+            {
+                var deleteRes = await _assignQuesService.DeleteAsync(assignId);
+                if (!deleteRes.Success) return deleteRes;
+            }
+
+            var homeQueIds = _unit.HomeQues
+                                  .Find(a => a.Type == (int)QuesTypeEnum.Sentence && a.SentenceQuesId == quesId)
+                                  .Select(a => a.HomeQuesId)
+                                  .ToList();
+
+            foreach (var homeId in homeQueIds)
+            {
+                var deleteRes = await _homeQuesService.DeleteAsync(homeId);
+                if (!deleteRes.Success) return deleteRes;
             }
 
             _unit.QuesRcSentences.Remove(queModel);
