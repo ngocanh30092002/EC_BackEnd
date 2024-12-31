@@ -223,6 +223,7 @@ namespace EnglishCenter.Business.Services.Classes
                 Success = true
             };
         }
+
         public async Task<Response> UpdateAsync(long id, ClassRoomDto roomModel)
         {
             var roomEntity = _unit.ClassRooms.GetById(id);

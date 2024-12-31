@@ -1,9 +1,6 @@
-﻿using AutoMapper;
-using EnglishCenter.DataAccess.Database;
+﻿using EnglishCenter.DataAccess.Database;
 using EnglishCenter.DataAccess.Entities;
 using EnglishCenter.DataAccess.IRepositories;
-using EnglishCenter.Presentation.Models;
-using EnglishCenter.Presentation.Models.DTOs;
 using Microsoft.EntityFrameworkCore;
 
 namespace EnglishCenter.DataAccess.Repositories.HomeRepositories
@@ -34,10 +31,10 @@ namespace EnglishCenter.DataAccess.Repositories.HomeRepositories
             return scheduleEvents;
         }
 
-        public async Task<List<bool>> GetEventsInRangeAsync(DateOnly startTime, DateOnly endTime)
+        public async Task<List<bool>> GetEventsInRangeAsync(string userId, DateOnly startTime, DateOnly endTime)
         {
             var scheduleEvents = await context.ScheduleEvents
-                                        .Where(e => e.Date >= startTime && e.Date <= endTime)
+                                        .Where(e => e.Date >= startTime && e.Date <= endTime && e.UserId == userId)
                                         .ToListAsync();
 
             int betweenDay = (endTime.ToDateTime(TimeOnly.MinValue) - startTime.ToDateTime(TimeOnly.MinValue)).Days;

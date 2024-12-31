@@ -7,6 +7,6 @@ namespace EnglishCenter.DataAccess.IRepositories
         public Task<List<ScheduleEvent>?> GetEventsByUserAsync(string userId);
         public Task<List<ScheduleEvent>?> GetEventsWithDateAsync(string userId, DateOnly date);
         public Task<bool> UpdateAsync(long eventId, ScheduleEvent model);
-        public Task<List<bool>> GetEventsInRangeAsync(DateOnly startTime, DateOnly endTime);
+        public Task<List<bool>> GetEventsInRangeAsync(string userId, DateOnly startTime, DateOnly endTime);
     }
 }

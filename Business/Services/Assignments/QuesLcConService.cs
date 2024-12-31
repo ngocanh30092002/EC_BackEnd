@@ -16,6 +16,8 @@ namespace EnglishCenter.Business.Services.Assignments
         private readonly IMapper _mapper;
         private readonly IWebHostEnvironment _webHostEnvironment;
         private readonly ISubLcConService _subService;
+        private readonly IHomeQuesService _homeQuesService;
+        private readonly IAssignQuesService _assignQuesService;
         private string _imageBasePath;
         private string _audioBasePath;
 
@@ -23,12 +25,16 @@ namespace EnglishCenter.Business.Services.Assignments
             IUnitOfWork unit,
             IMapper mapper,
             IWebHostEnvironment webHostEnvironment,
+            IHomeQuesService homeQuesService,
+            IAssignQuesService assignQuesService,
             ISubLcConService subService)
         {
             _unit = unit;
             _mapper = mapper;
             _webHostEnvironment = webHostEnvironment;
             _subService = subService;
+            _homeQuesService = homeQuesService;
+            _assignQuesService = assignQuesService;
             _imageBasePath = Path.Combine("questions", "lc_conversation", "image");
             _audioBasePath = Path.Combine("questions", "lc_conversation", "audio");
         }
@@ -260,51 +266,51 @@ namespace EnglishCenter.Business.Services.Assignments
                 queEntity.Image = Path.Combine(_imageBasePath, fileImage);
             }
 
-            if (queModel.Audio != null)
+            try
             {
-                var folderPath = Path.Combine(_webHostEnvironment.WebRootPath, _audioBasePath);
-                var fileAudio = $"audio_{DateTime.Now.Ticks}{Path.GetExtension(queModel.Audio.FileName)}";
-                var result = await UploadHelper.UploadFileAsync(queModel.Audio, folderPath, fileAudio);
-                if (!string.IsNullOrEmpty(result))
+                if (queModel.Audio != null)
+                {
+                    var folderPath = Path.Combine(_webHostEnvironment.WebRootPath, _audioBasePath);
+                    var fileAudio = $"audio_{DateTime.Now.Ticks}{Path.GetExtension(queModel.Audio.FileName)}";
+                    var result = await UploadHelper.UploadFileAsync(queModel.Audio, folderPath, fileAudio);
+                    if (!string.IsNullOrEmpty(result))
+                    {
+                        return new Response()
+                        {
+                            StatusCode = System.Net.HttpStatusCode.BadRequest,
+                            Message = result,
+                            Success = false
+                        };
+                    }
+
+                    var durationVideo = await VideoHelper.GetDurationAsync(Path.Combine(folderPath, fileAudio));
+
+                    queEntity.Time = TimeOnly.FromTimeSpan(durationVideo);
+                    queEntity.Audio = Path.Combine(_audioBasePath, fileAudio);
+                }
+                else
                 {
                     return new Response()
                     {
                         StatusCode = System.Net.HttpStatusCode.BadRequest,
-                        Message = result,
+                        Message = "Audio is required",
                         Success = false
                     };
                 }
 
-                var durationVideo = await VideoHelper.GetDurationAsync(Path.Combine(folderPath, fileAudio));
-
-                queEntity.Time = TimeOnly.FromTimeSpan(durationVideo);
-                queEntity.Audio = Path.Combine(_audioBasePath, fileAudio);
-            }
-            else
-            {
-                return new Response()
+                if (queModel.Quantity <= 0)
                 {
-                    StatusCode = System.Net.HttpStatusCode.BadRequest,
-                    Message = "Audio is required",
-                    Success = false
-                };
-            }
+                    return new Response()
+                    {
+                        StatusCode = System.Net.HttpStatusCode.BadRequest,
+                        Message = "Quantity must be greater than 0",
+                        Success = false
+                    };
+                }
 
-            if (queModel.Quantity <= 0)
-            {
-                return new Response()
-                {
-                    StatusCode = System.Net.HttpStatusCode.BadRequest,
-                    Message = "Quantity must be greater than 0",
-                    Success = false
-                };
-            }
+                queEntity.Quantity = queModel.Quantity ?? 1;
+                queEntity.Level = queModel.Level ?? 1;
 
-            queEntity.Quantity = queModel.Quantity ?? 1;
-            queEntity.Level = queModel.Level ?? 1;
-
-            try
-            {
                 _unit.QuesLcCons.Add(queEntity);
                 await _unit.CompleteAsync();
 
@@ -376,6 +382,28 @@ namespace EnglishCenter.Business.Services.Assignments
             foreach (var subId in subIds)
             {
                 await _subService.DeleteAsync(subId);
+            }
+
+            var assignQueIds = _unit.AssignQues
+                                  .Find(a => a.Type == (int)QuesTypeEnum.Conversation && a.ConversationQuesId == quesId)
+                                  .Select(a => a.AssignQuesId)
+                                  .ToList();
+
+            foreach (var assignId in assignQueIds)
+            {
+                var deleteRes = await _assignQuesService.DeleteAsync(assignId);
+                if (!deleteRes.Success) return deleteRes;
+            }
+
+            var homeQueIds = _unit.HomeQues
+                                .Find(a => a.Type == (int)QuesTypeEnum.Conversation && a.ConversationQuesId == quesId)
+                                .Select(a => a.HomeQuesId)
+                                .ToList();
+
+            foreach (var homeId in homeQueIds)
+            {
+                var deleteRes = await _homeQuesService.DeleteAsync(homeId);
+                if (!deleteRes.Success) return deleteRes;
             }
 
             _unit.QuesLcCons.Remove(queModel);

@@ -16,15 +16,25 @@ namespace EnglishCenter.Business.Services.Assignments
         private readonly IMapper _mapper;
         private readonly ISubRcSingleService _subService;
         private readonly IWebHostEnvironment _webHostEnvironment;
+        private readonly IAssignQuesService _assignQuesService;
         private string _imageBasePath;
+        private readonly IHomeQuesService _homeQuesService;
 
-        public QuesRcSingleService(IUnitOfWork unit, IMapper mapper, IWebHostEnvironment webHostEnvironment, ISubRcSingleService subService)
+        public QuesRcSingleService(
+            IUnitOfWork unit,
+            IMapper mapper,
+            IWebHostEnvironment webHostEnvironment,
+            ISubRcSingleService subService,
+            IHomeQuesService homeQuesService,
+            IAssignQuesService assignQuesService)
         {
             _unit = unit;
             _mapper = mapper;
             _subService = subService;
             _webHostEnvironment = webHostEnvironment;
             _imageBasePath = Path.Combine("questions", "rc_single", "image");
+            _homeQuesService = homeQuesService;
+            _assignQuesService = assignQuesService;
         }
 
         public async Task<Response> ChangeImageAsync(long quesId, IFormFile imageFile)
@@ -317,6 +327,28 @@ namespace EnglishCenter.Business.Services.Assignments
             foreach (var subId in subIds)
             {
                 await _subService.DeleteAsync(subId);
+            }
+
+            var assignQueIds = _unit.AssignQues
+                                  .Find(a => a.Type == (int)QuesTypeEnum.Single && a.SingleQuesId == quesId)
+                                  .Select(a => a.AssignQuesId)
+                                  .ToList();
+
+            foreach (var assignId in assignQueIds)
+            {
+                var deleteRes = await _assignQuesService.DeleteAsync(assignId);
+                if (!deleteRes.Success) return deleteRes;
+            }
+
+            var homeQueIds = _unit.HomeQues
+                                .Find(a => a.Type == (int)QuesTypeEnum.Single && a.SingleQuesId == quesId)
+                                .Select(a => a.HomeQuesId)
+                                .ToList();
+
+            foreach (var homeId in homeQueIds)
+            {
+                var deleteRes = await _homeQuesService.DeleteAsync(homeId);
+                if (!deleteRes.Success) return deleteRes;
             }
 
             _unit.QuesRcSingles.Remove(queModel);

@@ -11,7 +11,7 @@ namespace EnglishCenter.Business.IServices
         public Task<Response> GetEventsAsync(string userId);
         public Task<Response> GetEventsWithDateAsync(string userId, DateOnly date);
         public Task<Response> GetEventAsync(long eventId);
-        public Task<Response> GetEventsInRangeAsync(DateOnly startTime, DateOnly endTime);
+        public Task<Response> GetEventsInRangeAsync(string userId, DateOnly startTime, DateOnly endTime);
         public Task<Response> SendTaskInfoToNotiAsync(string userId, long scheduleId);
     }
 }
