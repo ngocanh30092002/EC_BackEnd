@@ -131,7 +131,10 @@ namespace EnglishCenter.Business.Services.HomeworkTasks
 
         public async Task<Response> ChangeFeedbackAsync(long hwSubId, string feedback)
         {
-            var submitModel = _unit.HwSubmissions.GetById(hwSubId);
+            var submitModel = await _unit.HwSubmissions
+                                         .Include(s => s.Enrollment)
+                                         .FirstOrDefaultAsync(s => s.SubmissionId == hwSubId);
+
             if (submitModel == null)
             {
                 return new Response()
@@ -152,6 +155,15 @@ namespace EnglishCenter.Business.Services.HomeworkTasks
                     Success = false
                 };
             }
+
+            await _unit.Notifications.SendNotificationToUser(submitModel.Enrollment.UserId, submitModel.Enrollment.ClassId, new NotiDto()
+            {
+                Title = "Automatic Message",
+                Description = $"You have received a feedback from teacher",
+                Image = "/notifications/images/automatic.svg",
+                IsRead = false,
+                Time = DateTime.Now,
+            });
 
             await _unit.CompleteAsync();
             return new Response()

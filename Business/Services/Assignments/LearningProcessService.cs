@@ -313,60 +313,75 @@ namespace EnglishCenter.Business.Services.Assignments
             }
             else
             {
-                var courseContentId = processModel.AssignmentId == null ? processModel.Examination!.ContentId : processModel.Assignment!.CourseContentId;
-                var courseContentModel = _unit.CourseContents.GetById(courseContentId);
-
-                var nextAssignments = _unit.Assignments
-                                        .Include(a => a.CourseContent)
-                                        .Where(a => a.CourseContent.CourseId == courseContentModel.CourseId
-                                                    && (
-                                                            (a.CourseContent.NoNum == courseContentModel.NoNum && a.NoNum > processModel.Assignment.NoNum) ||
-                                                            (a.CourseContent.NoNum > courseContentModel.NoNum)
-                                                        )
-                                                )
-                                        .Select(a => a.AssignmentId)
-                                        .Distinct();
-
-                var isExist = _unit.LearningProcesses.IsExist(a => a.EnrollId == processModel.EnrollId && nextAssignments.Any(id => id == a.AssignmentId));
-                if (isExist)
+                if (processModel.AssignmentId.HasValue)
                 {
+                    var courseContentId = processModel.AssignmentId == null ? processModel.Examination!.ContentId : processModel.Assignment!.CourseContentId;
+                    var courseContentModel = _unit.CourseContents.GetById(courseContentId);
+
+                    var nextAssignments = _unit.Assignments
+                                            .Include(a => a.CourseContent)
+                                            .Where(a => a.CourseContent.CourseId == courseContentModel.CourseId
+                                                        && (
+                                                                (a.CourseContent.NoNum == courseContentModel.NoNum && a.NoNum > processModel.Assignment.NoNum) ||
+                                                                (a.CourseContent.NoNum > courseContentModel.NoNum)
+                                                            )
+                                                    )
+                                            .Select(a => a.AssignmentId)
+                                            .Distinct();
+
+                    var isExist = _unit.LearningProcesses.IsExist(a => a.EnrollId == processModel.EnrollId && nextAssignments.Any(id => id == a.AssignmentId));
+                    if (isExist)
+                    {
+                        return new Response()
+                        {
+                            StatusCode = System.Net.HttpStatusCode.BadRequest,
+                            Message = "Can't delete this processes",
+                            Success = false
+                        };
+                    }
+
+                    var otherCourseContentIds = _unit.CourseContents
+                                                  .Find(p => p.CourseId == courseContentModel.CourseId &&
+                                                             p.NoNum > courseContentModel.NoNum
+                                                             && p.Type != (int)CourseContentTypeEnum.Normal)
+                                                  .Select(p => p.ContentId);
+
+                    isExist = await _unit.LearningProcesses
+                                         .Include(p => p.Examination)
+                                         .AnyAsync(p => p.Examination != null && otherCourseContentIds.Any(c => c == p.Examination.ContentId));
+
+                    if (isExist)
+                    {
+                        return new Response()
+                        {
+                            StatusCode = System.Net.HttpStatusCode.BadRequest,
+                            Message = "Can't delete this processes",
+                            Success = false
+                        };
+                    }
+
+                    _unit.LearningProcesses.Remove(processModel);
+                    await _unit.CompleteAsync();
+
                     return new Response()
                     {
-                        StatusCode = System.Net.HttpStatusCode.BadRequest,
-                        Message = "Can't delete this processes",
-                        Success = false
+                        StatusCode = System.Net.HttpStatusCode.OK,
+                        Message = "",
+                        Success = true
                     };
                 }
-
-                var otherCourseContentIds = _unit.CourseContents
-                                              .Find(p => p.CourseId == courseContentModel.CourseId &&
-                                                         p.NoNum > courseContentModel.NoNum
-                                                         && p.Type != (int)CourseContentTypeEnum.Normal)
-                                              .Select(p => p.ContentId);
-
-                isExist = await _unit.LearningProcesses
-                                     .Include(p => p.Examination)
-                                     .AnyAsync(p => p.Examination != null && otherCourseContentIds.Any(c => c == p.Examination.ContentId));
-
-                if (isExist)
+                else
                 {
+                    _unit.LearningProcesses.Remove(processModel);
+                    await _unit.CompleteAsync();
+
                     return new Response()
                     {
-                        StatusCode = System.Net.HttpStatusCode.BadRequest,
-                        Message = "Can't delete this processes",
-                        Success = false
+                        StatusCode = System.Net.HttpStatusCode.OK,
+                        Message = "",
+                        Success = true
                     };
                 }
-
-                _unit.LearningProcesses.Remove(processModel);
-                await _unit.CompleteAsync();
-
-                return new Response()
-                {
-                    StatusCode = System.Net.HttpStatusCode.OK,
-                    Message = "",
-                    Success = true
-                };
             }
 
         }
@@ -1289,6 +1304,103 @@ namespace EnglishCenter.Business.Services.Assignments
                         if (!response.Success) return response;
                     }
                 }
+                else
+                {
+                    var assignQues = _unit.AssignQues
+                                          .Find(a => a.AssignmentId == processModel.AssignmentId)
+                                          .OrderBy(a => a.Type)
+                                          .ToList();
+
+                    foreach (var ques in assignQues)
+                    {
+                        await _unit.AssignQues.LoadQuestionWithoutAnswerAsync(ques);
+
+                        if (ques.Type != (int)QuesTypeEnum.Conversation && ques.Type != (int)QuesTypeEnum.Single && ques.Type != (int)QuesTypeEnum.Double && ques.Type != (int)QuesTypeEnum.Triple)
+                        {
+                            var recordModel = new AssignRecordDto();
+
+                            recordModel.AssignQuesId = ques.AssignQuesId;
+                            recordModel.ProcessId = processModel.ProcessId;
+                            recordModel.SelectedAnswer = null;
+                            recordModel.IsCorrect = false;
+
+                            var response = await _assignmentRecordService.CreateAsync(recordModel);
+                            if (!response.Success) return response;
+
+                        }
+                        else
+                        {
+                            if (ques.Type == (int)QuesTypeEnum.Conversation)
+                            {
+                                var subQueIds = ques.QuesConversation!.SubLcConversations.Select(q => q.SubId).ToList();
+                                foreach (var subQueId in subQueIds)
+                                {
+                                    var recordModel = new AssignRecordDto();
+                                    recordModel.AssignQuesId = ques.AssignQuesId;
+                                    recordModel.ProcessId = processModel.ProcessId;
+                                    recordModel.SubId = subQueId;
+                                    recordModel.SelectedAnswer = null;
+                                    recordModel.IsCorrect = false;
+
+                                    var response = await _assignmentRecordService.CreateAsync(recordModel);
+                                    if (!response.Success) return response;
+                                }
+                            }
+
+                            if (ques.Type == (int)QuesTypeEnum.Single)
+                            {
+                                var subQueIds = ques.QuesSingle!.SubRcSingles.Select(q => q.SubId).ToList();
+                                foreach (var subQueId in subQueIds)
+                                {
+                                    var recordModel = new AssignRecordDto();
+                                    recordModel.AssignQuesId = ques.AssignQuesId;
+                                    recordModel.ProcessId = processModel.ProcessId;
+                                    recordModel.SubId = subQueId;
+                                    recordModel.SelectedAnswer = null;
+                                    recordModel.IsCorrect = false;
+
+                                    var response = await _assignmentRecordService.CreateAsync(recordModel);
+                                    if (!response.Success) return response;
+                                }
+                            }
+
+                            if (ques.Type == (int)QuesTypeEnum.Double)
+                            {
+                                var subQueIds = ques.QuesDouble!.SubRcDoubles.Select(q => q.SubId).ToList();
+                                foreach (var subQueId in subQueIds)
+                                {
+                                    var recordModel = new AssignRecordDto();
+                                    recordModel.AssignQuesId = ques.AssignQuesId;
+                                    recordModel.ProcessId = processModel.ProcessId;
+                                    recordModel.SubId = subQueId;
+                                    recordModel.SelectedAnswer = null;
+                                    recordModel.IsCorrect = false;
+
+                                    var response = await _assignmentRecordService.CreateAsync(recordModel);
+                                    if (!response.Success) return response;
+                                }
+                            }
+
+                            if (ques.Type == (int)QuesTypeEnum.Triple)
+                            {
+                                var subQueIds = ques.QuesTriple!.SubRcTriples.Select(q => q.SubId).ToList();
+                                foreach (var subQueId in subQueIds)
+                                {
+                                    var recordModel = new AssignRecordDto();
+                                    recordModel.AssignQuesId = ques.AssignQuesId;
+                                    recordModel.ProcessId = processModel.ProcessId;
+                                    recordModel.SubId = subQueId;
+                                    recordModel.SelectedAnswer = null;
+                                    recordModel.IsCorrect = false;
+
+                                    var response = await _assignmentRecordService.CreateAsync(recordModel);
+                                    if (!response.Success) return response;
+                                }
+                            }
+                        }
+                    }
+
+                }
 
                 var correctNum = _unit.AssignmentRecords.Find(a => a.LearningProcessId == processModel.ProcessId && a.IsCorrect).Count();
                 var numQues = await _unit.AssignQues.GetNumberByAssignmentAsync(processModel.AssignmentId!.Value);
@@ -1332,18 +1444,9 @@ namespace EnglishCenter.Business.Services.Assignments
         {
             try
             {
-                if (model.ToeicRecords != null && model.ToeicRecords.Count > 0)
-                {
-                    foreach (var record in model.ToeicRecords)
-                    {
-                        var response = await _toeicRecordService.CreateAsync(record);
-                        if (!response.Success) return response;
-                    }
-                }
-
                 var examModel = await _unit.Examinations
-                                     .Include(e => e.CourseContent)
-                                     .FirstOrDefaultAsync(e => e.ExamId == model.ExamId);
+                                   .Include(e => e.CourseContent)
+                                   .FirstOrDefaultAsync(e => e.ExamId == model.ExamId);
 
                 if (examModel == null)
                 {
@@ -1353,6 +1456,38 @@ namespace EnglishCenter.Business.Services.Assignments
                         Message = "Can't find any examinations",
                         Success = false
                     };
+                }
+
+                if (model.ToeicRecords != null && model.ToeicRecords.Count > 0)
+                {
+                    foreach (var record in model.ToeicRecords)
+                    {
+                        var response = await _toeicRecordService.CreateAsync(record);
+                        if (!response.Success) return response;
+                    }
+                }
+                else
+                {
+                    var subIds = await _unit.SubToeic
+                                            .Include(s => s.QuesToeic)
+                                            .Where(s => s.QuesToeic.ToeicId == examModel.ToeicId)
+                                            .OrderBy(s => s.QuesNo)
+                                            .Select(s => s.SubId)
+                                            .ToListAsync();
+
+                    foreach (var id in subIds)
+                    {
+                        var response = await _toeicRecordService.CreateAsync(new ToeicRecordDto()
+                        {
+                            SubId = id,
+                            SelectedAnswer = null,
+                            ProcessId = processModel.ProcessId,
+                            IsCorrect = false
+                        });
+
+                        if (!response.Success) return response;
+                    }
+
                 }
 
                 var scoreHisModel = _unit.ScoreHis.GetById(processModel.Enrollment.ScoreHisId!.Value);
