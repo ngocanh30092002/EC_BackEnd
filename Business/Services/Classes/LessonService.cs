@@ -582,6 +582,17 @@ namespace EnglishCenter.Business.Services.Classes
                 };
             }
 
+            var classModel = _unit.Classes.GetById(lessonEntity.ClassId);
+            if (classModel == null)
+            {
+                return new Response()
+                {
+                    StatusCode = System.Net.HttpStatusCode.BadRequest,
+                    Message = "Can't find any classes",
+                    Success = false
+                };
+            }
+
             await _unit.BeginTransAsync();
 
             try
@@ -592,23 +603,50 @@ namespace EnglishCenter.Business.Services.Classes
                     if (!res.Success) return res;
                 }
 
-                if (lessonEntity.Date.ToString() != lessonModel.Date)
+                //if (lessonEntity.Date.ToString() != lessonModel.Date)
+                //{
+                //    var res = await ChangeDateAsync(id, lessonModel.Date);
+                //    if (!res.Success) return res;
+                //}
+
+                //if (lessonEntity.StartPeriod != lessonModel.StartPeriod)
+                //{
+                //    var res = await ChangeStartPeriodAsync(id, lessonModel.StartPeriod);
+                //    if (!res.Success) return res;
+                //}
+
+                //if (lessonEntity.EndPeriod != lessonModel.EndPeriod)
+                //{
+                //    var res = await ChangeEndPeriodAsync(id, lessonModel.EndPeriod);
+                //    if (!res.Success) return res;
+                //}
+                if (!DateOnly.TryParse(lessonModel.Date, out DateOnly date))
                 {
-                    var res = await ChangeDateAsync(id, lessonModel.Date);
-                    if (!res.Success) return res;
+                    return new Response()
+                    {
+                        StatusCode = System.Net.HttpStatusCode.BadRequest,
+                        Message = "Date is invalid",
+                        Success = false
+                    };
                 }
 
-                if (lessonEntity.StartPeriod != lessonModel.StartPeriod)
+                var isDuplicateLesson = await _unit.Lessons.IsDuplicateAsync(date, lessonEntity.ClassRoomId, lessonModel.StartPeriod, lessonModel.EndPeriod, lessonEntity.LessonId);
+
+                var isDuplicateTeacher = await _unit.Lessons.IsDuplicateTeacherAsync(date, lessonModel.StartPeriod, lessonModel.EndPeriod, classModel.TeacherId, lessonEntity.LessonId);
+
+                if (isDuplicateLesson || isDuplicateTeacher)
                 {
-                    var res = await ChangeStartPeriodAsync(id, lessonModel.StartPeriod);
-                    if (!res.Success) return res;
+                    return new Response()
+                    {
+                        StatusCode = System.Net.HttpStatusCode.BadRequest,
+                        Message = "This schedule has been duplicated with another schedule.",
+                        Success = false
+                    };
                 }
 
-                if (lessonEntity.EndPeriod != lessonModel.EndPeriod)
-                {
-                    var res = await ChangeEndPeriodAsync(id, lessonModel.EndPeriod);
-                    if (!res.Success) return res;
-                }
+                lessonEntity.StartPeriod = lessonModel.StartPeriod;
+                lessonEntity.EndPeriod = lessonModel.EndPeriod;
+                lessonEntity.Date = date;
 
                 if (lessonEntity.Topic != lessonModel.Topic)
                 {
