@@ -65,10 +65,10 @@ namespace EnglishCenter.DataAccess.Repositories.ClassRepositories
             var classModel = await context.Classes.FindAsync(lesson.ClassId);
             if (classModel == null) return false;
 
-            var isDuplicate = await IsDuplicateAsync(dateOnly, lesson.ClassRoomId, lesson.StartPeriod, lesson.EndPeriod);
+            var isDuplicate = await IsDuplicateAsync(dateOnly, lesson.ClassRoomId, lesson.StartPeriod, lesson.EndPeriod, lesson.LessonId);
             if (isDuplicate) return false;
 
-            var isDuplicateTeacher = await IsDuplicateTeacherAsync(dateOnly, lesson.StartPeriod, lesson.EndPeriod, classModel.TeacherId);
+            var isDuplicateTeacher = await IsDuplicateTeacherAsync(dateOnly, lesson.StartPeriod, lesson.EndPeriod, classModel.TeacherId, lesson.LessonId);
             if (isDuplicateTeacher) return false;
 
             lesson.Date = dateOnly;
